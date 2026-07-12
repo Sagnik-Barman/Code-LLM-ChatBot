@@ -1,4 +1,21 @@
-# Build an LLM From Scratch
+# Build an LLM From Scratch (reference pipeline)
+
+> **This is the original from-scratch GPT-2 pipeline, kept as a reference/learning
+> exercise.** It is **not** the actively developed coding chatbot — that's the
+> Qwen2.5-Coder + LoRA pipeline documented in
+> [`README_HF_PIPELINE.md`](README_HF_PIPELINE.md), which is what
+> `app_hf.py` / `autonomous_trainer_hf.py` / `lora_finetune.py` etc. belong to.
+>
+> **Why the switch:** after continued pretraining + instruction fine-tuning,
+> this pipeline was tested against 5 real DSA problems (`eval_set.json`) by
+> actually executing its generated code. It scored **0/5** — genuine bugs in
+> every response (unterminated strings, indentation that didn't match any
+> consistent level, mismatched function/variable names). This isn't a data or
+> training-recipe problem; GPT-2's BPE tokenizer doesn't track Python's
+> whitespace-sensitive syntax reliably, and 124M/355M parameters isn't enough
+> capacity to compensate. This pipeline is genuinely useful for understanding
+> how a GPT model is built and trained end-to-end — just don't expect
+> reliable code generation from it.
 
 A from-scratch GPT implementation in PyTorch, following the path you've already
 worked through in your notebooks: tokenizer -> BPE -> embeddings -> attention ->
@@ -17,6 +34,12 @@ source venv/bin/activate        # on Windows: venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
+`requirements.txt` is shared with the active Qwen2.5-Coder pipeline (both
+live in this same project), so this installs more than this pipeline alone
+strictly needs (`transformers`, `peft`, `accelerate`, `bitsandbytes`,
+`datasets`, `fastapi`, `uvicorn` are for the other pipeline; `tiktoken`,
+`numpy`, `matplotlib`, `pandas` are what this one actually uses).
+
 The first time you run anything that uses `tiktoken.get_encoding("gpt2")`, it
 downloads the GPT-2 BPE vocab files (~2MB) from OpenAI's servers and caches
 them locally — needs internet once, then works offline.
@@ -28,10 +51,16 @@ them locally — needs internet once, then works offline.
 | `model.py` | The GPT architecture itself: attention, transformer blocks, the full model |
 | `dataset.py` | Sliding-window dataset/dataloader for next-token prediction |
 | `generate.py` | Text generation: greedy decoding + temperature/top-k sampling |
-| `train.py` | **Chapter 5** — pretrains a GPT model from random weights on `data/the-verdict.txt` |
+| `train.py` | **Chapter 5** — pretrains a GPT model from **random** weights on `data/the-verdict.txt`. Demonstrates training mechanics only; not for continued pretraining on real pretrained weights (see `continue_pretrain.py` for that). |
 | `load_pretrained.py` | **Chapter 5 (cont.)** — downloads real OpenAI GPT-2 weights and loads them into our architecture |
+| `continue_pretrain.py` | Continues training **real pretrained GPT-2 weights** on a custom corpus (e.g. code), unlike `train.py` which starts from scratch |
 | `classify_finetune.py` | **Chapter 6** — fine-tunes GPT-2 as a spam/ham classifier (UCI SMS Spam Collection) |
+| `diagnose_classifier.py` | Per-class accuracy/confusion-matrix breakdown for the spam classifier |
 | `instruction_finetune.py` | **Chapter 7** — fine-tunes GPT-2 to follow instructions, Alpaca-style |
+| `app.py` | Serves the fine-tuned model over a local chat API with hot-reload (`/api/reload`). **No conversation history, no save-to-project** — see the compatibility note above before pointing the shared `static/index.html` frontend at this. |
+| `autonomous_trainer.py` | Scheduled learn-from-users loop for this pipeline (harvest chat logs -> filter via `sandbox.py` -> retrain -> auto-eval -> promote/reject). See `AUTONOMOUS_TRAINING_README.md`. |
+| `eval_checkpoint.py` | Runs `eval_set.json` against a checkpoint and reports a real, executed pass rate |
+| `sandbox.py`, `interaction_logger.py` | Shared with the Qwen pipeline: sandboxed code execution for the training filter, and chat-interaction logging |
 
 ## 3. Run it
 
@@ -53,6 +82,15 @@ loads them into *your own* `GPTModel` class — proving your from-scratch
 architecture is bit-for-bit compatible with the real thing. Available sizes:
 `"gpt2-small (124M)"`, `"gpt2-medium (355M)"`, `"gpt2-large (774M)"`, `"gpt2-xl (1558M)"`.
 
+### Continue pretraining on a custom corpus (e.g. code)
+```bash
+python continue_pretrain.py --data data/code_corpus.txt --epochs 3
+```
+Starts from real pretrained weights (not random init like `train.py`) and
+keeps training on your own text/code corpus. This was the first step toward
+a coding-focused version of this model, before testing showed the approach's
+limits (see the note at the top of this file).
+
 ### Fine-tune as a spam classifier
 ```bash
 python classify_finetune.py --epochs 5
@@ -62,6 +100,7 @@ swaps GPT-2's output head for a 2-class classifier, and fine-tunes just the
 last transformer block + new head (fast, doesn't need much data). Then:
 ```bash
 python classify_finetune.py --text "You won a free prize! Click here now!!!"
+python diagnose_classifier.py   # per-class accuracy breakdown
 ```
 
 ### Fine-tune to follow instructions (Alpaca-style)
@@ -78,6 +117,22 @@ faster/lighter. Then:
 python instruction_finetune.py --prompt "Convert 10 miles to kilometers."
 ```
 
+### Serve it as a chatbot
+```bash
+python app.py --model checkpoints/instruction_model.pth
+```
+Serves over `http://localhost:8000`. Again: this shares `static/index.html`
+with the Qwen pipeline's `app_hf.py`, but doesn't implement the
+conversation-history or save-to-project endpoints that frontend expects —
+expect the sidebar and save button to not work correctly here.
+
+### Evaluate honestly
+```bash
+python eval_checkpoint.py --checkpoint checkpoints/instruction_model.pth --verbose
+```
+Actually executes the model's generated code against `eval_set.json` and
+reports a real pass rate, rather than eyeballing output quality.
+
 ## 4. Notes on the datasets you linked
 
 - **`instruction-data.json`** (rasbt's repo) — downloaded automatically by
@@ -89,8 +144,7 @@ python instruction_finetune.py --prompt "Convert 10 miles to kilometers."
 - **UCI SMS Spam Collection** — downloaded automatically by `classify_finetune.py`.
 - **OpenAI GPT-2 Weights (Kaggle)** — `load_pretrained.py` uses Hugging Face
   instead (simpler, no manual download/Kaggle login needed, no TensorFlow
-  dependency). If you'd rather use the Kaggle mirror, download it, extract it,
-  and tell me the folder structure — I'll add a loader for it.
+  dependency).
 
 ## 5. Hardware
 
@@ -104,7 +158,7 @@ On Apple Silicon, use `--device mps` instead of `--device cuda`.
 ## 6. What's deliberately *not* included
 
 - Multi-GPU / distributed training (single-device only, matching the book's scope)
-- DPO/RLHF-style preference tuning (chapter 7 of the book covers this as an
-  extra — say the word if you want it added)
-- A web UI — these are all CLI scripts by design, for transparency over what's
-  actually happening
+- DPO/RLHF-style preference tuning
+- Conversation memory / multi-turn chat, and save-to-project — these exist
+  in the Qwen pipeline (`app_hf.py`) but were never built for this one, since
+  development moved to Qwen before those features existed
