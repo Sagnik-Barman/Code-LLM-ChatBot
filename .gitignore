@@ -8,11 +8,11 @@ venv/
 # regenerate via lora_finetune.py / continue_pretrain.py rather than commit
 checkpoints/
 
-# Training/chat data and logs -- may contain personal conversation content
+# Training/chat data and logs -- may contain personal conversation content,
+# and includes unrelated exercise datasets (e.g. data/sms_spam/) not part
+# of this project
+data/
 logs/
-data/*.json
-data/*.txt
-data/code_corpus.txt
 
 # User-generated output from the "Save to project" chat feature
 generated_files/
