@@ -1,0 +1,18 @@
+# Coding LLM pipeline (Qwen2.5-Coder + LoRA) -- the active system
+torch
+transformers
+peft
+accelerate
+datasets
+bitsandbytes
+fastapi
+uvicorn
+pydantic
+requests
+
+# Original from-scratch GPT-2 pipeline (kept as reference, per your call to
+# keep app.py / train.py / instruction_finetune.py etc. runnable)
+tiktoken
+numpy
+matplotlib
+pandas

@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.pyc
+venv/
+.venv/
+
+# Model weights, adapters, and training checkpoints -- large binaries,
+# regenerate via lora_finetune.py / continue_pretrain.py rather than commit
+checkpoints/
+
+# Training/chat data and logs -- may contain personal conversation content
+logs/
+data/*.json
+data/*.txt
+data/code_corpus.txt
+
+# User-generated output from the "Save to project" chat feature
+generated_files/
+
+# HF/transformers local cache, if it ever ends up inside the project dir
+.cache/
+
+# Editor/OS cruft
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
